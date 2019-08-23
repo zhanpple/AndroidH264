@@ -1,6 +1,5 @@
 # AndroidH264
-AndroidH264
-
+基于H264硬编码实现简单的视频直播Demo
 ## 知识点
 ### 1. Camera2 + ImageReader获取摄像头预览数据
 ### 2. H264编码预览数据
