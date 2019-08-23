@@ -1,4 +1,4 @@
-# AndroidH264
+# AndroidH264 [GitHub链接](https://github.com/zhanpple/AndroidH264)
 基于H264硬编码实现简单的视频直播Demo
 ## 知识点
 ### 1. Camera2 + ImageReader获取摄像头预览数据
