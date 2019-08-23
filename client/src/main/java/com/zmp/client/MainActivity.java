@@ -35,7 +35,7 @@ public class MainActivity extends AppCompatActivity {
 
         private int index = -1;
 
-        private AndroidDecode androidHradwareDecode;
+        private AndroidDecode androidDecode;
 
         private InetAddress group;
 
@@ -64,8 +64,8 @@ public class MainActivity extends AppCompatActivity {
         byte[] openArr = {0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c};
 
         private void initHandler() {
-                androidHradwareDecode = new AndroidDecode();
-                androidHradwareDecode.setCallBack(data -> {
+                androidDecode = new AndroidDecode();
+                androidDecode.setCallBack(data -> {
                         if (h264) {
                                 circleImageView.setNv21(data, ImageUtil.OR_270);
                         }
@@ -160,7 +160,7 @@ public class MainActivity extends AppCompatActivity {
                                 }
                                 if (dataArr.length == index && dataArr.length == length) {
                                         if (h264) {
-                                                androidHradwareDecode.onDecodeData(dataArr);
+                                                androidDecode.onDecodeData(dataArr);
                                         } else {
                                                 circleImageView.setNv21(dataArr, ImageUtil.OR_0);
                                         }
@@ -217,7 +217,7 @@ public class MainActivity extends AppCompatActivity {
                         }
                         ds = null;
                 }
-                androidHradwareDecode.releaseVideoEncode();
+                androidDecode.releaseVideoEncode();
                 handler.removeCallbacksAndMessages(null);
         }
 

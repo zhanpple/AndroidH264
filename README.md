@@ -8,8 +8,8 @@ AndroidH264
 ### 4. udp接受预览数据(合并包)
 ### 5. H264解码预览数据
 
-##Camera2 + ImageReader获取摄像头预览数据
-
+## Camera2 + ImageReader获取摄像头预览数据
+[Camera2FaceService](https://github.com/zhanpple/AndroidH264/blob/master/app/src/main/java/com/zmp/udptest/camera2/Camera2FaceService.java)
 ```java
     /**
     * 初始化ImageReader
@@ -157,7 +157,7 @@ AndroidH264
 
 ```
 
-##H264编码预览数据
+## H264编码预览数据
 [AndroidEncode](https://github.com/zhanpple/AndroidH264/blob/master/app/src/main/java/com/zmp/udptest/AndroidEncode.java)
 ```java
 mEncode = new AndroidEncode(CameraConfig.WIDTH, CameraConfig.HEIGHT, CameraConfig.vbitrate, CameraConfig.framerate, new AndroidEncode.IEncoderListener() {
@@ -178,5 +178,157 @@ mEncode = new AndroidEncode(CameraConfig.WIDTH, CameraConfig.HEIGHT, CameraConfi
                 });
 
 ```
+
+## udp发送数据
+[Camera2FaceService](https://github.com/zhanpple/AndroidH264/blob/master/app/src/main/java/com/zmp/udptest/camera2/Camera2FaceService.java)
+```java
+ udpHandler = new Handler(udpThread.getLooper()) {
+                        @Override
+                        public void handleMessage(Message msg) {
+                                switch (msg.what) {
+                                        case 0:
+                                                try {
+                                                        group = InetAddress.getByName(multicastHost);
+                                                        try {
+                                                                mss = new MulticastSocket(port);
+                                                                mss.joinGroup(group);
+                                                                if (h264) {
+                                                                        sendEmptyMessage(2);
+                                                                }
+                                                                Log.e(TAG, "joinGroup: success");
+                                                        } catch (IOException e) {
+                                                                e.printStackTrace();
+                                                                Log.e(TAG, "handleMessage: ", e);
+                                                                mss = null;
+                                                                sendEmptyMessageDelayed(0, 10 * 1000);
+                                                        }
+
+                                                } catch (UnknownHostException e1) {
+                                                        e1.printStackTrace();
+                                                        mss = null;
+                                                        sendEmptyMessageDelayed(0, 10 * 1000);
+                                                }
+                                                break;
+                                        case 1:
+                                                if (mss == null) {
+                                                        break;
+                                                }
+                                                byte[] buffer = (byte[]) msg.obj;
+                                                sendHeadData(buffer.length);
+                                                sendUdpData(buffer, 0, buffer.length);
+                                                sendEndData(buffer.length);
+                                                break;
+
+                                        case 2:
+                                                ThreadPoolProxyFactory.getNormalThreadPoolProxy().execute(
+                                                        new Runnable() {
+                                                                @Override
+                                                                public void run() {
+
+                                                                        byte[] buffers = new byte[1024];
+                                                                        DatagramPacket dp = new DatagramPacket(buffers, buffers.length);
+                                                                        Log.e(TAG, "handleMessage: receive");
+                                                                        try {
+                                                                                while (mss != null) {
+                                                                                        mss.receive(dp);
+                                                                                        byte[] data = dp.getData();
+                                                                                        mergeDatum(data, dp.getLength());
+                                                                                }
+                                                                        } catch (IOException e) {
+                                                                                e.printStackTrace();
+                                                                                mss = null;
+                                                                                removeMessages(0);
+                                                                                sendEmptyMessageDelayed(0, 10 * 1000);
+                                                                        }
+                                                                }
+                                                        }
+                                                );
+                                                break;
+                                        default:
+                                }
+                        }
+                };
+                udpHandler.sendEmptyMessage(0);
+```
+
+## udp接受数据
+[MainActivity](https://github.com/zhanpple/AndroidH264/blob/master/client/src/main/java/com/zmp/client/MainActivity.java)
+```
+ handler = new Handler(handlerThread.getLooper()) {
+                        @Override
+                        public void handleMessage(Message msg) {
+                                switch (msg.what) {
+                                        case 0:
+
+                                                Log.e(TAG, "handleMessage: joinGroup");
+                                                try {
+                                                        group = InetAddress.getByName(multicastHost);
+                                                        ds = new MulticastSocket(port);
+                                                        ds.joinGroup(group);
+                                                        if (h264) {
+                                                                sendEmptyMessageDelayed(1, 1000);
+                                                                sendEmptyMessageDelayed(2, 1000);
+                                                        } else {
+                                                                sendEmptyMessageDelayed(1, 1000);
+                                                        }
+                                                        Log.e(TAG, "joinGroup: success");
+                                                } catch (IOException e) {
+                                                        e.printStackTrace();
+                                                        removeMessages(0);
+                                                        sendEmptyMessageDelayed(0, 10 * 1000);
+                                                }
+                                                break;
+                                        case 1:
+                                                byte[] buffers = new byte[1024];
+                                                DatagramPacket dp = new DatagramPacket(buffers, buffers.length);
+                                                Log.e(TAG, "handleMessage: receive");
+                                                try {
+                                                        ds.receive(dp);
+                                                        byte[] data = dp.getData();
+                                                        mergeDatum(data, dp.getLength());
+                                                } catch (IOException e) {
+                                                        e.printStackTrace();
+                                                        removeMessages(0);
+                                                        sendEmptyMessageDelayed(0, 10 * 1000);
+                                                        return;
+                                                }
+                                                sendEmptyMessage(1);
+                                                break;
+
+                                        case 2:
+                                                final DatagramPacket dp2 = new DatagramPacket(
+                                                        openArr, openArr.length, group, port);
+                                                try {
+                                                        ds.send(dp2);
+                                                } catch (IOException e) {
+                                                        e.printStackTrace();
+                                                        removeMessages(0);
+                                                        sendEmptyMessageDelayed(0, 10 * 1000);
+                                                }
+                                                break;
+                                        default:
+                                }
+                        }
+                };
+        }
+
+```
+
+## H264解码
+[AndroidDecode](https://github.com/zhanpple/AndroidH264/blob/master/client/src/main/java/com/zmp/client/AndroidDecode.java)
+```java
+ androidDecode = new AndroidDecode();
+                androidDecode.setCallBack(data -> {
+                        if (h264) {
+                                circleImageView.setNv21(data, ImageUtil.OR_270);
+                        }
+                });
+```
+
+## 其他配置可参考 [CameraConfig](https://github.com/zhanpple/AndroidH264/blob/master/client/src/main/java/com/zmp/client/CameraConfig.java)
+
+# 拓展 https://www.cnblogs.com/renhui/p/7452572.html
+
+
 
 

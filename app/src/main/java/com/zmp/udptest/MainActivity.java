@@ -12,9 +12,12 @@ import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
 
+/**
+ * @author zmp
+ */
 public class MainActivity extends AppCompatActivity {
 
-        private AndroidDecode androidHradwareDecode;
+        private AndroidDecode androidDecode;
 
         private MyBaseFrameView viewById;
 
@@ -28,8 +31,8 @@ public class MainActivity extends AppCompatActivity {
                         startService(new Intent(this, Camera2FaceService.class)
                                 .putExtra(Camera2FaceService.ACTION_KEY, Camera2FaceService.ACTION_OPEN_CAMERA));
                 }
-                androidHradwareDecode = new AndroidDecode();
-                androidHradwareDecode.setCallBack(new AndroidDecode.ICallBack() {
+                androidDecode = new AndroidDecode();
+                androidDecode.setCallBack(new AndroidDecode.ICallBack() {
                         @Override
                         public void onBack(byte[] data) {
                                 viewById.setNv21(data, ImageUtil.OR_0);
@@ -39,7 +42,7 @@ public class MainActivity extends AppCompatActivity {
 
         @Subscribe(threadMode = ThreadMode.BACKGROUND)
         public void onEvent(byte[] bytes) {
-                androidHradwareDecode.onDecodeData(bytes);
+                androidDecode.onDecodeData(bytes);
 //                viewById.setNv21(bytes, ImageUtil.OR_270);
 
         }
@@ -60,7 +63,7 @@ public class MainActivity extends AppCompatActivity {
         protected void onDestroy() {
                 super.onDestroy();
                 EventBus.getDefault().unregister(this);
-                androidHradwareDecode.releaseMediaCodec();
+                androidDecode.releaseMediaCodec();
 //                startService(new Intent(this, Camera2FaceService.class)
 //                        .putExtra(Camera2FaceService.ACTION_KEY, Camera2FaceService.ACTION_CLOSE_CAMERA));
                 stopService(new Intent(this,Camera2FaceService.class));
