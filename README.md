@@ -327,7 +327,9 @@ mEncode = new AndroidEncode(CameraConfig.WIDTH, CameraConfig.HEIGHT, CameraConfi
 
 ## 其他配置可参考 [CameraConfig](https://github.com/zhanpple/AndroidH264/blob/master/client/src/main/java/com/zmp/client/CameraConfig.java)
 
-# 拓展 https://www.cnblogs.com/renhui/p/7452572.html
+### 参考文章 https://www.cnblogs.com/renhui/p/7452572.html
+
+## 有任何疑问或建议可随时联系邮箱: zhanpples@qq.com
 
 
 
