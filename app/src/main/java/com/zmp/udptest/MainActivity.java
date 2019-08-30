@@ -1,11 +1,11 @@
 package com.zmp.udptest;
 
 import android.content.Intent;
+import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
 
-import com.zmp.udptest.camera2.Camera2FaceService;
+import com.zmp.udptest.camera2.Camera2FaceService3;
 import com.zmp.udptest.camera2.ImageUtil;
 
 import org.greenrobot.eventbus.EventBus;
@@ -28,8 +28,8 @@ public class MainActivity extends AppCompatActivity {
                 EventBus.getDefault().register(this);
                 viewById = findViewById(R.id.cIV);
                 if (PermissionUtil.setActivePermissions(this)) {
-                        startService(new Intent(this, Camera2FaceService.class)
-                                .putExtra(Camera2FaceService.ACTION_KEY, Camera2FaceService.ACTION_OPEN_CAMERA));
+                        startService(new Intent(this, Camera2FaceService3.class)
+                                .putExtra(Camera2FaceService3.ACTION_KEY, Camera2FaceService3.ACTION_OPEN_CAMERA));
                 }
                 androidDecode = new AndroidDecode();
                 androidDecode.setCallBack(new AndroidDecode.ICallBack() {
@@ -43,7 +43,7 @@ public class MainActivity extends AppCompatActivity {
         @Subscribe(threadMode = ThreadMode.BACKGROUND)
         public void onEvent(byte[] bytes) {
                 androidDecode.onDecodeData(bytes);
-//                viewById.setNv21(bytes, ImageUtil.OR_270);
+                //                viewById.setNv21(bytes, ImageUtil.OR_270);
 
         }
 
@@ -52,8 +52,8 @@ public class MainActivity extends AppCompatActivity {
                 super.onRequestPermissionsResult(requestCode, permissions, grantResults);
                 if (requestCode == PermissionUtil.MY_PERMISSION_REQUEST_CODE) {
                         if (PermissionUtil.checkPermissionResult(grantResults)) {
-                                startService(new Intent(this, Camera2FaceService.class)
-                                        .putExtra(Camera2FaceService.ACTION_KEY, Camera2FaceService.ACTION_OPEN_CAMERA));
+                                startService(new Intent(this, Camera2FaceService3.class)
+                                        .putExtra(Camera2FaceService3.ACTION_KEY, Camera2FaceService3.ACTION_OPEN_CAMERA));
                         }
                 }
         }
@@ -64,9 +64,9 @@ public class MainActivity extends AppCompatActivity {
                 super.onDestroy();
                 EventBus.getDefault().unregister(this);
                 androidDecode.releaseMediaCodec();
-//                startService(new Intent(this, Camera2FaceService.class)
-//                        .putExtra(Camera2FaceService.ACTION_KEY, Camera2FaceService.ACTION_CLOSE_CAMERA));
-                stopService(new Intent(this,Camera2FaceService.class));
+                //                startService(new Intent(this, Camera2FaceService2.class)
+                //                        .putExtra(Camera2FaceService2.ACTION_KEY, Camera2FaceService2.ACTION_CLOSE_CAMERA));
+                stopService(new Intent(this, Camera2FaceService3.class));
         }
 
 }

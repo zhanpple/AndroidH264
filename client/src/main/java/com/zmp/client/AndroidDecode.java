@@ -130,6 +130,8 @@ public class AndroidDecode {
                 } catch (Exception e) {
                         e.printStackTrace();
                         Log.e("ggh1", "解码后", e);
+                        resetVideoEncode();
+                        startVideoEncode();
                 }
         }
 

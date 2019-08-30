@@ -35,25 +35,30 @@ import com.zmp.udptest.ThreadPoolProxyFactory;
 import org.greenrobot.eventbus.EventBus;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.MulticastSocket;
-import java.net.UnknownHostException;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Iterator;
+import java.util.List;
 
 /**
  * @author zmp
  * <p>
  * Camera2 实现后台无界面预览数据
- * 数据接收EventBus {@link Camera2FaceService#initImageReader}
+ * 数据接收EventBus {@link Camera2FaceService3#initImageReader}
  * EventBus.getDefault().post(bytes)
  *
  *
- * UDP发送数据
+ * UDP发送组播消息  TCP连接
  */
-public class Camera2FaceService extends Service {
+public class Camera2FaceService3 extends Service {
 
         private static final String TAG = "Camera2FaceService";
 
@@ -81,12 +86,19 @@ public class Camera2FaceService extends Service {
 
         private MulticastSocket mss;
 
-        private final int port = 8005;
+        private final int PORT = 8005;
+
+        private final int PORT2 = 8006;
 
         private AndroidEncode mEncode;
 
+        private final List<Socket> clients = Collections.synchronizedList(new ArrayList<Socket>());
 
-        private boolean h264 = true;
+        private ServerSocket mServerSocket;
+
+        private boolean isCreated;
+
+        private Handler tcpHandler;
 
         @Nullable
         @Override
@@ -99,9 +111,85 @@ public class Camera2FaceService extends Service {
         public void onCreate() {
                 super.onCreate();
                 Log.d(TAG, "onCreate: ");
+                isCreated = true;
                 HandlerThread handlerThread = new HandlerThread(TAG);
                 handlerThread.start();
                 backgroundHandler = new Handler(handlerThread.getLooper());
+                initUdp();
+                initTcp();
+                initImageReader();
+        }
+
+        private void initTcp() {
+                HandlerThread tcpThread = new HandlerThread(TAG + TAG + TAG);
+                tcpThread.start();
+                tcpHandler = new Handler(tcpThread.getLooper()) {
+                        @Override
+                        public void handleMessage(Message msg) {
+                                if (msg.what == 0) {
+                                        try {
+                                                mServerSocket = new ServerSocket(PORT2);
+                                                while (isCreated) {
+                                                        final Socket clientSocket = mServerSocket.accept();
+                                                        handleSocket(clientSocket);
+                                                }
+                                        } catch (IOException e) {
+                                                e.printStackTrace();
+                                                sendEmptyMessageDelayed(0, 5 * 1000);
+                                        }
+                                }
+                        }
+                };
+                tcpHandler.sendEmptyMessage(0);
+        }
+
+        private synchronized void handleSocket(Socket clientSocket) {
+                synchronized (clients) {
+                        clients.add(clientSocket);
+                        sendH264AllClients(arr);
+                }
+        }
+
+        public final synchronized void sendH264AllClients(final byte[] h264) {
+                synchronized (clients) {
+                        if (h264 == null || h264.length == 0 || clients.isEmpty()) {
+                                return;
+                        }
+                }
+                ThreadPoolProxyFactory.getNormalThreadPoolProxy().execute(new Runnable() {
+                        @Override
+                        public void run() {
+                                synchronized (clients) {
+                                        Iterator<Socket> socketIterator = clients.iterator();
+                                        while (socketIterator.hasNext()) {
+                                                Socket client = socketIterator.next();
+                                                if (client == null) {
+                                                        break;
+                                                }
+                                                OutputStream outputStream;
+                                                try {
+                                                        outputStream = client.getOutputStream();
+                                                        byte[] h264Data = getH264Data(h264);
+                                                        outputStream.write(h264Data);
+                                                        outputStream.flush();
+                                                } catch (IOException e) {
+                                                        try {
+                                                                client.close();
+                                                        } catch (IOException e1) {
+                                                                e1.printStackTrace();
+                                                        }
+                                                        socketIterator.remove();
+                                                        e.printStackTrace();
+                                                }
+
+                                        }
+                                }
+                        }
+                });
+        }
+
+
+        private void initUdp() {
                 HandlerThread udpThread = new HandlerThread(TAG + TAG);
                 udpThread.start();
                 udpHandler = new Handler(udpThread.getLooper()) {
@@ -111,21 +199,11 @@ public class Camera2FaceService extends Service {
                                         case 0:
                                                 try {
                                                         group = InetAddress.getByName(multicastHost);
-                                                        try {
-                                                                mss = new MulticastSocket(port);
-                                                                mss.joinGroup(group);
-                                                                if (h264) {
-                                                                        sendEmptyMessage(2);
-                                                                }
-                                                                Log.e(TAG, "joinGroup: success");
-                                                        } catch (IOException e) {
-                                                                e.printStackTrace();
-                                                                Log.e(TAG, "handleMessage: ", e);
-                                                                mss = null;
-                                                                sendEmptyMessageDelayed(0, 10 * 1000);
-                                                        }
-
-                                                } catch (UnknownHostException e1) {
+                                                        mss = new MulticastSocket(PORT);
+                                                        mss.joinGroup(group);
+                                                        sendEmptyMessage(1);
+                                                        Log.e(TAG, "joinGroup: success");
+                                                } catch (Exception e1) {
                                                         e1.printStackTrace();
                                                         mss = null;
                                                         sendEmptyMessageDelayed(0, 10 * 1000);
@@ -135,119 +213,40 @@ public class Camera2FaceService extends Service {
                                                 if (mss == null) {
                                                         break;
                                                 }
-                                                byte[] buffer = (byte[]) msg.obj;
-                                                sendHeadData(buffer.length);
-                                                sendUdpData(buffer, 0, buffer.length);
-                                                sendEndData(buffer.length);
+                                                try {
+                                                        final DatagramPacket dp = new DatagramPacket(
+                                                                openArr, openArr.length, group, PORT);
+                                                        mss.send(dp);
+                                                        sendEmptyMessageDelayed(1, 2 * 1000);
+                                                } catch (IOException e) {
+                                                        e.printStackTrace();
+                                                        mss = null;
+                                                        sendEmptyMessageDelayed(0, 10 * 1000);
+                                                }
                                                 break;
 
-                                        case 2:
-                                                ThreadPoolProxyFactory.getNormalThreadPoolProxy().execute(
-                                                        new Runnable() {
-                                                                @Override
-                                                                public void run() {
-
-                                                                        byte[] buffers = new byte[1024];
-                                                                        DatagramPacket dp = new DatagramPacket(buffers, buffers.length);
-                                                                        Log.e(TAG, "handleMessage: receive");
-                                                                        try {
-                                                                                while (mss != null) {
-                                                                                        mss.receive(dp);
-                                                                                        byte[] data = dp.getData();
-                                                                                        mergeDatum(data, dp.getLength());
-                                                                                }
-                                                                        } catch (IOException e) {
-                                                                                e.printStackTrace();
-                                                                                mss = null;
-                                                                                removeMessages(0);
-                                                                                sendEmptyMessageDelayed(0, 10 * 1000);
-                                                                        }
-                                                                }
-                                                        }
-                                                );
-                                                break;
                                         default:
                                 }
                         }
                 };
                 udpHandler.sendEmptyMessage(0);
-                initImageReader();
         }
 
-        private void mergeDatum(byte[] data, int length) {
-                if (length == openArr.length) {
-                        for (int i = 0; i < length; i++) {
-                                if (data[i] != openArr[i]) {
-                                        return;
-                                }
-                        }
-                        if (arr != null) {
-                                Log.e(TAG, "mergeDatum open");
-                                udpHandler.obtainMessage(1, arr).sendToTarget();
-                        }
-                }
-        }
 
         byte[] startArr = {0x0a, 0x0a, 0x00, 0x00, 0x00, 0x00};
 
-        byte[] endArr = {0x0b, 0x0b, 0x00, 0x00, 0x00, 0x00};
-
         byte[] openArr = {0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c};
 
-        private void sendUdpData(byte[] buffer, int start, int length) {
-                if (length <= start) {
-                        return;
-                }
-                byte[] bytes;
-                if (length - start > 1024) {
-                        bytes = Arrays.copyOfRange(buffer, start, start + 1024);
-                } else {
-                        bytes = Arrays.copyOfRange(buffer, start, length);
-                }
-                final DatagramPacket dp = new DatagramPacket(
-                        bytes, bytes.length, group, port);
-                try {
-                        mss.send(dp);
-                        Log.d(TAG, "mss.send(dp);");
-                } catch (IOException e) {
-                        e.printStackTrace();
-                        return;
-                }
-                start += 1024;
-                sendUdpData(buffer, start, length);
-        }
-
-
-        private void sendEndData(int length) {
-                byte[] int32 = SocketStreamUtils.getInt32(length);
-                endArr[2] = int32[0];
-                endArr[3] = int32[1];
-                endArr[4] = int32[2];
-                endArr[5] = int32[3];
-                final DatagramPacket dp = new DatagramPacket(
-                        endArr, endArr.length, group, port);
-                try {
-                        mss.send(dp);
-                        Log.d(TAG, "mss.send(sendEndData);");
-                } catch (IOException e) {
-                        e.printStackTrace();
-                }
-        }
-
-        private void sendHeadData(int length) {
-                byte[] int32 = SocketStreamUtils.getInt32(length);
+        private byte[] getH264Data(byte[] buffer) {
+                byte[] bytes = new byte[buffer.length + startArr.length];
+                byte[] int32 = SocketStreamUtils.getInt32(buffer.length);
                 startArr[2] = int32[0];
                 startArr[3] = int32[1];
                 startArr[4] = int32[2];
                 startArr[5] = int32[3];
-                final DatagramPacket dp = new DatagramPacket(
-                        startArr, startArr.length, group, port);
-                try {
-                        mss.send(dp);
-                        Log.d(TAG, "mss.send(sendHeadData);");
-                } catch (IOException e) {
-                        e.printStackTrace();
-                }
+                System.arraycopy(startArr, 0, bytes, 0, startArr.length);
+                System.arraycopy(buffer, 0, bytes, startArr.length, buffer.length);
+                return bytes;
         }
 
 
@@ -297,19 +296,9 @@ public class Camera2FaceService extends Service {
                                 if (image == null) {
                                         return;
                                 }
-                                if (h264) {
-                                        byte[] nv12;
-                                        nv12 = ImageUtil.YUV_420_888(image);
-                                        if (nv12 != null) {
-                                                mEncode.encoderYUV420(nv12);
-                                        }
-                                } else {
-                                        byte[] obj = ImageUtil.YUV_420_888toNV21(image);
-                                        if (obj != null) {
-                                                EventBus.getDefault().post(obj);
-                                                udpHandler.removeMessages(1);
-                                                udpHandler.obtainMessage(1, obj).sendToTarget();
-                                        }
+                                byte[] nv12 = ImageUtil.YUV_420_888(image);
+                                if (nv12 != null) {
+                                        mEncode.encoderYUV420(nv12);
                                 }
                                 image.close();
                         }
@@ -324,11 +313,7 @@ public class Camera2FaceService extends Service {
                                         isFirst = true;
                                         arr = data;
                                 }
-
-                                if (h264) {
-                                        udpHandler.removeMessages(1);
-                                        udpHandler.obtainMessage(1, data).sendToTarget();
-                                }
+                                sendH264AllClients(data);
                         }
                 });
 
@@ -467,6 +452,7 @@ public class Camera2FaceService extends Service {
         @Override
         public void onDestroy() {
                 super.onDestroy();
+                isCreated = false;
                 Log.d(TAG, "onDestroy: ");
                 asyncCloseCamera();
                 if (mss != null) {
@@ -477,9 +463,11 @@ public class Camera2FaceService extends Service {
                         }
                         mss = null;
                 }
-
                 mEncode.releaseMediaCodec();
+                ThreadPoolProxyFactory.getNormalThreadPoolProxy().shutDown();
                 udpHandler.removeCallbacks(null);
+                tcpHandler.removeCallbacks(null);
+
         }
 
 }
